@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from app.models.user_model import UserModel
+from app.models.user_model import UserModel, UserRole
 from fastapi import HTTPException, status
 from app.core.security import (
     hash_password,
@@ -8,7 +8,7 @@ from app.core.security import (
     create_access_token,
     decode_access_token
 )
-from app.core.redis_client import redis_client
+from app.core.redis_client import redis_client 
 
 
 class AuthService:
@@ -16,7 +16,7 @@ class AuthService:
         self.db = db_session
     
 
-    async def register_user(self, email: str, password: str = None, username: str = None, google_id: str = None):
+    async def register_user(self, email: str, password: str = None, username: str = None, google_id: str = None, role: str = "user"):
         query = select(UserModel).where(UserModel.email == email)
         existing_user = (await self.db.execute(query)).scalar_one_or_none()
         if existing_user:
@@ -44,7 +44,8 @@ class AuthService:
             username=username,
             hashed_password=hashed_password,
             google_id=google_id,
-            is_verified=bool(google_id)  # OAuth пользователи автоматически верифицированы
+            is_verified=bool(google_id),  # OAuth пользователи автоматически верифицированы
+            role=role
         )
         self.db.add(user)
         await self.db.commit()
