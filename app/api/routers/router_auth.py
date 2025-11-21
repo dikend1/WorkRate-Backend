@@ -142,39 +142,33 @@ async def google_callback(
     db: AsyncSession = Depends(get_db),
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    # Обмениваем код на токен с Authlib
-    token_url = "https://oauth2.googleapis.com/token"
-    token_data = {
-        "client_id": settings.OAUTH_GOOGLE_CLIENT_ID,
-        "client_secret": settings.OAUTH_GOOGLE_CLIENT_SECRET,
-        "code": code,
-        "grant_type": "authorization_code",
-        "redirect_uri": "http://localhost:8000/auth/google/callback"
-    }
-    
-    # Используем Authlib клиент для получения токена
-    async with oauth_client as client:
-        token_response = await client.post(token_url, data=token_data)
-        token_json = token_response.json()
-        
-        if "access_token" not in token_json:
+    try:
+        # Используем Authlib для обмена кода на токен
+        token = await oauth_client.fetch_token(
+            'https://oauth2.googleapis.com/token',
+            authorization_response=f'http://localhost:8000/auth/google/callback?code={code}&state={state}'
+        )
+
+        if not token or 'access_token' not in token:
             raise HTTPException(status_code=400, detail="Failed to get access token")
-        
-        access_token = token_json["access_token"]
-        
+
+        access_token = token['access_token']
+
         # Получаем информацию о пользователе
         user_info_url = "https://www.googleapis.com/oauth2/v2/userinfo"
         headers = {"Authorization": f"Bearer {access_token}"}
-        user_response = await client.get(user_info_url, headers=headers)
-        user_info = user_response.json()
-        
+
+        async with AsyncOAuth2Client() as client:
+            user_response = await client.get(user_info_url, headers=headers)
+            user_info = user_response.json()
+
         email = user_info.get("email")
         google_id = user_info.get("id")
         name = user_info.get("name", "")
-        
+
         if not email or not google_id:
             raise HTTPException(status_code=400, detail="Failed to get user info")
-        
+
         # Ищем пользователя по google_id или email
         from sqlalchemy import select
         query = select(UserModel).where(
@@ -182,7 +176,7 @@ async def google_callback(
         )
         result = await db.execute(query)
         user = result.scalar_one_or_none()
-        
+
         if not user:
             # Создаем нового пользователя
             username = email.split("@")[0]  # Простой username из email
@@ -195,10 +189,13 @@ async def google_callback(
             db.add(user)
             await db.commit()
             await db.refresh(user)
-        
+
         # Создаем токен
         token_data = await auth_service.create_token(user)
         return token_data
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"OAuth error: {str(e)}")
 
     
     
