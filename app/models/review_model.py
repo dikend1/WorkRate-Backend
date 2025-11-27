@@ -1,11 +1,12 @@
 from sqlalchemy import Column,String,Integer,DateTime,Text,Float,ForeignKey,Enum
 from app.db.base import Base
+from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
 
 
 class ReviewStatus(str,enum.Enum):
-    PENDING = "peding"
+    PENDING = "pending"
     VERIFIED = "verified"
     REJECTED = "rejected"
 
@@ -24,4 +25,8 @@ class ReviewModel(Base):
     status = Column(String,default=ReviewStatus.PENDING.value,nullable=False)
     created_at = Column(DateTime,default=datetime.utcnow)
     updated_at = Column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("UserModel", back_populates="reviews")
+    company = relationship("CompanyModel", back_populates="reviews")
     
