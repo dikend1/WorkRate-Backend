@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, Float, ForeignKey
 from app.db.base import Base
+from sqlalchemy.orm import relationship
 from datetime import datetime
 
 class SalaryModel(Base):
@@ -14,3 +15,7 @@ class SalaryModel(Base):
     experience_years = Column(Float, nullable=True)
     location = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("UserModel", back_populates="salaries")
+    company = relationship("CompanyModel", back_populates="salaries")
