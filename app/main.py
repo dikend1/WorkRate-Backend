@@ -13,4 +13,4 @@ app.include_router(company_router)
 
 @app.get("/")
 def root():
-    return {"message": "Welcome to IWork "}
+    return {"message": "Welcome to WorkRate-Backend"}
