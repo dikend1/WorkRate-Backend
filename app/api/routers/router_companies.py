@@ -41,7 +41,7 @@ async def update_company(
     _user = Depends(require_admin)
 ):
     updated_company = await company_service.update_company(company_id,company)
-    if not updated_company:
+    if not update_company:
         raise HTTPException(status_code=404,detail="Company not found")
     return updated_company
 
