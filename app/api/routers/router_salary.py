@@ -55,9 +55,9 @@ async def delete_salary(
     token: str = Query(...)
 ):
     user = await auth_service.get_current_user(token)
-    deleted_salary = await salary_service.delete_salary(salary_id,user.id)
+    deleted_salary = await salary_service.delete_salary(salary_id,user)
     if not deleted_salary:
-        raise HTTPException(status_code=404,detail="Salary not found or not owned by user")
+        raise HTTPException(status_code=404,detail="Salary not found or not authorized")
     return {"message":"Salary deleted"}
 
 
