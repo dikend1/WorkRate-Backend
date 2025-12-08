@@ -23,6 +23,8 @@ async def create_salary(
     auth_service: AuthService = Depends(get_auth_service),
     token: str = Query(...)
 ):
+    # Логируем входящие данные для отладки
+    print(f"Создание salary: {salary.model_dump()}")
     user = await auth_service.get_current_user(token)
     return await salary_service.create_salary(salary,user.id)
 
