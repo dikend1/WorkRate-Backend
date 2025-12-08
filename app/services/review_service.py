@@ -24,8 +24,8 @@ class ReviewService:
     
     async def get_review(self,review_id:int)->ReviewModel:
         query = select(ReviewModel).where(ReviewModel.id == review_id)
-        reslut = await self.db.execute(query)
-        return reslut.scalar_one_or_none()
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
     
     async def get_reviews_by_company(self, company_id: int, status: str | None = None, skip: int = 0, limit: int = 10) -> List[ReviewModel]:
         query = select(ReviewModel).where(ReviewModel.company_id == company_id)
