@@ -12,6 +12,13 @@ class ReviewService:
     
 
     async def create_review(self,review_data:ReviewCreate,user_id: int) -> ReviewModel:
+        # Check if company exists
+        company_query = select(CompanyModel).where(CompanyModel.id == review_data.company_id)
+        company_result = await self.db.execute(company_query)
+        company = company_result.scalar_one_or_none()
+        if not company:
+            raise HTTPException(status_code=404, detail=f"Company with id {review_data.company_id} not found")
+        
         review = ReviewModel(
             **review_data.model_dump(),
             user_id = user_id,
@@ -27,10 +34,8 @@ class ReviewService:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
     
-    async def get_reviews_by_company(self, company_id: int, status: str | None = None, skip: int = 0, limit: int = 10) -> List[ReviewModel]:
+    async def get_reviews_by_company(self, company_id: int, skip: int = 0, limit: int = 10) -> List[ReviewModel]:
         query = select(ReviewModel).where(ReviewModel.company_id == company_id)
-        if status:
-            query = query.where(ReviewModel.status == status)
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return result.scalars().all()
@@ -85,9 +90,10 @@ class ReviewService:
         await self.db.refresh(review)
         return review
     
-    async def get_all_reviews(self, status: str | None = None) -> List[ReviewModel]:
+    async def get_all_reviews(self, status: str | None = None, skip: int = 0, limit: int = 10) -> List[ReviewModel]:
         query = select(ReviewModel)
         if status:
             query = query.where(ReviewModel.status == status)
+        query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return result.scalars().all()
