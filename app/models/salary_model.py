@@ -11,7 +11,7 @@ class SalaryModel(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     position = Column(String, nullable=False)
     salary_amount = Column(Float, nullable=False)
-    currency = Column(String(3), default="USD", nullable=False)  # USD, EUR, KZT
+    currency = Column(String, default="USD", nullable=True)
     experience_years = Column(Float, nullable=True)
     location = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
