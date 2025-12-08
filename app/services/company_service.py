@@ -14,11 +14,16 @@ class CompanyService:
         await self.db.refresh(company)
         return company
     
-    async def get_company(self,company_id:int) ->CompanyModel:
+    async def get_company(self,company_id:int)->CompanyModel:
         query = select(CompanyModel).where(CompanyModel.id == company_id)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
-    
+
+    async def get_all_companies(self) -> list[CompanyModel]:
+        query = select(CompanyModel)
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
     async def update_company(self,company_id:int,company_data:CompanyUpdate)->CompanyModel:
         company = await self.get_company(company_id)
         if not company:
