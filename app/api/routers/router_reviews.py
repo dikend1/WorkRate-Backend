@@ -5,7 +5,6 @@ from app.models.review_model import ReviewModel
 from app.schemas.review_schema import ReviewCreate, ReviewResponse, ReviewUpdate  
 from app.services.review_service import ReviewService 
 from app.services.auth_service import AuthService
-from app.core.security import get_current_user_dependency
 from typing import List
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
@@ -50,9 +49,11 @@ async def update_review(
 @router.delete("/{review_id}")
 async def delete_review(
     review_id: int,
-    user = Depends(get_current_user_dependency),
-    review_service: ReviewService = Depends(get_review_service)
+    review_service: ReviewService = Depends(get_review_service),
+    auth_service: AuthService = Depends(get_auth_service),
+    token: str = Query(...)
 ):
+    user = await auth_service.get_current_user(token)
     deleted = await review_service.delete_review(review_id, user)
     if not deleted:
         raise HTTPException(status_code=404, detail="Review not found or not authorized")
