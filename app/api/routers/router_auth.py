@@ -11,7 +11,7 @@ from starlette.responses import RedirectResponse
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 from app.core.roles import require_admin, require_moderator
 import secrets
-from app.core.roles import  require_admin, require_moderator
+import httpx
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -126,24 +126,60 @@ async def moderator_reviews(user = Depends(require_moderator)):
 
 # Google OAuth routes with Authlib
 @router.get("/google/login")
-async def google_login():
-    # Создаем authorization URL с Authlib
-    authorization_url, state = oauth_client.create_authorization_url(
+async def google_login(request: Request):
+    """
+    Начинаем OAuth flow:
+    1. Генерируем state для CSRF защиты
+    2. Сохраняем state в session
+    3. Редиректим пользователя на Google
+    """
+    # Генерируем случайный state для защиты от CSRF
+    state = secrets.token_urlsafe(32)
+    
+    # ВАЖНО: Сохраняем state в session для проверки в callback
+    request.session["oauth_state"] = state
+    
+    # Создаем authorization URL
+    authorization_url, _ = oauth_client.create_authorization_url(
         'https://accounts.google.com/o/oauth2/auth',
-        scope=['openid', 'email', 'profile']
+        scope=['openid', 'email', 'profile'],
+        state=state  # Передаем наш state
     )
     
-    return {"auth_url": authorization_url, "state": state}
+    # Редиректим пользователя на Google (НЕ возвращаем JSON!)
+    return RedirectResponse(authorization_url)
 
 @router.get("/google/callback")
 async def google_callback(
+    request: Request,
     code: str,
     state: str,
     db: AsyncSession = Depends(get_db),
     auth_service: AuthService = Depends(get_auth_service)
 ):
+    """
+    Callback от Google:
+    1. Проверяем state (защита от CSRF)
+    2. Обмениваем code на токены (КОД МОЖНО ИСПОЛЬЗОВАТЬ ТОЛЬКО ОДИН РАЗ!)
+    3. Получаем информацию о пользователе
+    4. Создаем/находим пользователя в БД
+    5. ВАЖНО: Редиректим на другую страницу (убираем code из URL!)
+    """
     try:
-        # Используем Authlib для обмена кода на токен
+        # ШАГАН 1: Проверяем state для защиты от CSRF атак
+        saved_state = request.session.get("oauth_state")
+        if not saved_state or saved_state != state:
+            raise HTTPException(
+                status_code=400,
+                detail="State mismatch - возможная CSRF атака. Попробуйте снова."
+            )
+        
+        # Удаляем state из session (больше не нужен)
+        request.session.pop("oauth_state", None)
+        
+        # ШАГ 2: Обмениваем authorization code на токены
+        # КРИТИЧЕСКИ ВАЖНО: Код можно использовать ТОЛЬКО ОДИН РАЗ!
+        # Если пользователь обновит страницу, код уже будет недействителен
         token = await oauth_client.fetch_token(
             'https://oauth2.googleapis.com/token',
             authorization_response=f'http://localhost:8000/auth/google/callback?code={code}&state={state}'
@@ -154,11 +190,11 @@ async def google_callback(
 
         access_token = token['access_token']
 
-        # Получаем информацию о пользователе
+        # ШАГ 3: Получаем информацию о пользователе через Google API
         user_info_url = "https://www.googleapis.com/oauth2/v2/userinfo"
         headers = {"Authorization": f"Bearer {access_token}"}
 
-        async with AsyncOAuth2Client() as client:
+        async with httpx.AsyncClient() as client:
             user_response = await client.get(user_info_url, headers=headers)
             user_info = user_response.json()
 
@@ -169,7 +205,7 @@ async def google_callback(
         if not email or not google_id:
             raise HTTPException(status_code=400, detail="Failed to get user info")
 
-        # Ищем пользователя по google_id или email
+        # ШАГ 4: Ищем или создаем пользователя в БД
         from sqlalchemy import select
         query = select(UserModel).where(
             (UserModel.google_id == google_id) | (UserModel.email == email)
@@ -190,12 +226,52 @@ async def google_callback(
             await db.commit()
             await db.refresh(user)
 
-        # Создаем токен
+        # ШАГ 5: Создаем наш JWT токен
         token_data = await auth_service.create_token(user)
-        return token_data
+        
+        # Сохраняем токен и user info в session
+        request.session["user"] = {
+            "email": user.email,
+            "username": user.username,
+            "id": user.id
+        }
+        request.session["access_token"] = token_data["access_token"]
+        
+        # ШАГ 6: КРИТИЧЕСКИ ВАЖНО!
+        # Редиректим на другую страницу, чтобы убрать 'code' из URL
+        # Если этого не сделать, при рефреше страницы браузер попытается
+        # переиспользовать code, что приведет к ошибке
+        return RedirectResponse(
+            url="/auth/success",
+            status_code=status.HTTP_302_FOUND
+        )
 
+    except HTTPException:
+        raise
     except Exception as e:
+        # Логируем полную ошибку для отладки
+        import traceback
+        print(f"OAuth error: {str(e)}")
+        print(traceback.format_exc())
         raise HTTPException(status_code=400, detail=f"OAuth error: {str(e)}")
+
+
+@router.get("/success")
+async def auth_success(request: Request):
+    """
+    Страница успешной авторизации
+    Показывает данные пользователя из session
+    """
+    user = request.session.get("user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    return {
+        "message": "Successfully authenticated!",
+        "user": user,
+        "access_token": request.session.get("access_token")
+    }
+
 
     
     
