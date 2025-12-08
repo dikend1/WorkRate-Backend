@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.models.review_model import ReviewModel  
@@ -18,13 +18,31 @@ def get_auth_service(db: AsyncSession = Depends(get_db)):
 @router.post("/", response_model=ReviewResponse)
 async def create_review(
     review: ReviewCreate,
-    files: List[UploadFile] = File(None),  # Для загрузки фото (раздел 3.3)
     review_service: ReviewService = Depends(get_review_service),
     auth_service: AuthService = Depends(get_auth_service),
     token: str = Query(...)
 ):
     user = await auth_service.get_current_user(token)
-    return await review_service.create_review(review, user.id, files)
+    return await review_service.create_review(review, user.id)
+
+@router.get("/", response_model=List[ReviewResponse])
+async def get_all_reviews(
+    status: str = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
+    review_service: ReviewService = Depends(get_review_service)
+):
+    return await review_service.get_all_reviews(status, skip, limit)
+
+@router.get("/{review_id}", response_model=ReviewResponse)
+async def get_review(
+    review_id: int,
+    review_service: ReviewService = Depends(get_review_service)
+):
+    review = await review_service.get_review(review_id)
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    return review
 
 @router.get("/company/{company_id}", response_model=List[ReviewResponse])
 async def get_company_reviews(
@@ -58,10 +76,3 @@ async def delete_review(
     if not deleted:
         raise HTTPException(status_code=404, detail="Review not found or not authorized")
     return {"message": "Review deleted"}
-
-@router.get("/admin", response_model=List[ReviewResponse])
-async def get_all_reviews_for_admin(
-    status: str = Query(None), 
-    review_service: ReviewService = Depends(get_review_service),
-):
-    return await review_service.get_all_reviews(status)
