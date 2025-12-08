@@ -156,6 +156,7 @@ alembic/versions/*.db
 
 # Task file
 task.md
+OAUTH_EXPLANATION.md
 
 # Secrets
 secrets.json
