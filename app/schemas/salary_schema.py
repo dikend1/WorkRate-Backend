@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
@@ -6,7 +6,7 @@ class SalaryBase(BaseModel):
     company_id: int
     position: str
     salary_amount: float
-    currency: str = "USD"
+    currency: str | None = "USD"
     experience_years: float | None = None
     location: str | None = None
 
