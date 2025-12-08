@@ -23,17 +23,23 @@ async def create_company(
 ):
     return await company_service.create_company(company)
 
-@router.get("/",response_model=CompanyResponse)
+@router.get("/", response_model=List[CompanyResponse])
+async def get_companies(
+    company_service: CompanyService = Depends(get_company_service)
+):
+    return await company_service.get_all_companies()
+
+@router.get("/{company_id}",response_model=CompanyResponse)
 async def get_company(
     company_id:int,
     company_service: CompanyService = Depends(get_company_service)
 ):
     company = await company_service.get_company(company_id)
     if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+        raise HTTPException(status_code=404,detail="Company not found")
     return company
 
-@router.patch("/{company_id}",response_model=CompanyUpdate)
+@router.patch("/{company_id}",response_model=CompanyResponse)
 async def update_company(
     company_id:int,
     company: CompanyUpdate,
@@ -41,7 +47,7 @@ async def update_company(
     _user = Depends(require_admin)
 ):
     updated_company = await company_service.update_company(company_id,company)
-    if not update_company:
+    if not updated_company:
         raise HTTPException(status_code=404,detail="Company not found")
     return updated_company
 
@@ -54,4 +60,4 @@ async def delete_company(
     deleted = await company_service.delete_company(company_id)
     if not deleted:
         raise HTTPException(status_code=404,detail="Company not found")
-    return {"message:" "Company deleted"}
+    return {"message": "Company deleted"}
