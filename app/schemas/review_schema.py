@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, date
 
 class ReviewBase(BaseModel):
     company_id: int
@@ -8,6 +8,11 @@ class ReviewBase(BaseModel):
     content: str
     pros: str | None = None
     cons: str | None = None
+    is_current_employee: bool = True
+    employment_end_date: date | None = None
+    is_anonymous: bool = False
+    recommendations: str | None = None
+    work_location: str | None = None
 
 class ReviewCreate(ReviewBase):
     pass
@@ -18,6 +23,11 @@ class ReviewUpdate(BaseModel):
     content: str | None = None
     pros: str | None = None
     cons: str | None = None
+    is_current_employee: bool | None = None
+    employment_end_date: date | None = None
+    is_anonymous: bool | None = None
+    recommendations: str | None = None
+    work_location: str | None = None
 
 class ReviewResponse(ReviewBase):
     id: int
