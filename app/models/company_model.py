@@ -15,7 +15,7 @@ class CompanyModel(Base):
     logo_url = Column(String, nullable=True)
     rating = Column(Float, default=0.0)
     founded_year = Column(Integer,nullable=True)
-    tax_contributions = Column(Float,default=True)
+    tax_contributions = Column(Float,default=None)
     stock_price = Column(Float,nullable=True)
     is_public = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
