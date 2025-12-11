@@ -31,3 +31,4 @@ class UserModel(Base):
     role = Column(String, default=UserRole.USER.value, nullable=False)
     reviews = relationship("ReviewModel", back_populates="user")
     salaries = relationship("SalaryModel", back_populates="user")
+    account_settings = relationship("AccountSettings", back_populates="user", uselist=False)
