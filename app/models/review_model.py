@@ -1,4 +1,4 @@
-from sqlalchemy import Column,String,Integer,DateTime,Text,Float,ForeignKey,Enum
+from sqlalchemy import Column,String,Integer,DateTime,Text,Float,ForeignKey,Boolean
 from app.db.base import Base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -22,6 +22,11 @@ class ReviewModel(Base):
     content = Column(Text,nullable=False)
     pros = Column(Text,nullable=True)
     cons = Column(Text,nullable=True)
+    is_current_employee = Column(Boolean,default=True)
+    employment_end_data = Column(DateTime,nullable=True)
+    is_anonymous = Column(Boolean,default=False)
+    recommendations = Column(String,nullable=True)
+    work_location = Column(String,nullable=True)
     status = Column(String,default=ReviewStatus.PENDING.value,nullable=False)
     created_at = Column(DateTime,default=datetime.utcnow)
     updated_at = Column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)
