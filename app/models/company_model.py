@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float,Boolean
 from app.db.base import Base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -14,6 +14,10 @@ class CompanyModel(Base):
     location = Column(String, nullable=True)
     logo_url = Column(String, nullable=True)
     rating = Column(Float, default=0.0)
+    founded_year = Column(Integer,nullable=True)
+    tax_contributions = Column(Float,default=True)
+    stock_price = Column(Float,nullable=True)
+    is_public = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
