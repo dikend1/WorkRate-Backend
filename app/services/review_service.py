@@ -1,9 +1,10 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select,update
-from app.models.review_model import ReviewModel,ReviewStatus
+from sqlalchemy import select
 from app.models.company_model import CompanyModel
-from app.schemas.review_schema import ReviewCreate,ReviewResponse,ReviewUpdate
-from typing import List,Optional
+from app.models.review_model import ReviewModel,ReviewStatus
+from app.schemas.review_schema import ReviewCreate,ReviewUpdate
+from datetime import datetime
+from typing import List
 from fastapi import HTTPException
 
 class ReviewService:
@@ -36,7 +37,7 @@ class ReviewService:
     
     async def get_reviews_by_company(self, company_id: int, skip: int = 0, limit: int = 10) -> List[ReviewModel]:
         query = select(ReviewModel).where(ReviewModel.company_id == company_id)
-        query = query.offset(skip).limit(limit)
+        query = query.order_by(ReviewModel.created_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(query)
         return result.scalars().all()
     
@@ -44,17 +45,13 @@ class ReviewService:
         review = await self.get_review(review_id)
         if not review:
             raise HTTPException(status_code=404, detail="Review not found")
-        # Allow update for owner, admin, or company owner
+        # Allow update for owner or admin.
         if user.role == 'admin':
             pass
         elif review.user_id == user.id:
             pass
         else:
-            company_query = select(CompanyModel).where(CompanyModel.id == review.company_id)
-            company_result = await self.db.execute(company_query)
-            company = company_result.scalar_one_or_none()
-            if not company or company.user_id != user.id:
-                raise HTTPException(status_code=404, detail="Review not found")
+            raise HTTPException(status_code=404, detail="Review not found")
         for field,value in review_data.model_dump(exclude_unset=True).items():
             setattr(review,field,value)
         
@@ -66,34 +63,56 @@ class ReviewService:
         review = await self.get_review(review_id)
         if not review:
             return False
-        # Allow delete for owner, admin, or company owner
+        # Allow delete for owner or admin.
         if user.role == 'admin':
             pass
         elif review.user_id == user.id:
             pass
         else:
-            company_query = select(CompanyModel).where(CompanyModel.id == review.company_id)
-            company_result = await self.db.execute(company_query)
-            company = company_result.scalar_one_or_none()
-            if not company or company.user_id != user.id:
-                return False
+            return False
         await self.db.delete(review)
         await self.db.commit()
         return True
-        
-    async def moderate_review(self,review_id: int,status: ReviewStatus) ->ReviewModel:
+
+    async def set_attachment(self, review_id: int, attachment_url: str, user) -> ReviewModel:
         review = await self.get_review(review_id)
         if not review:
             raise HTTPException(status_code=404, detail="Review not found")
-        review.status = status.value
+        if user.role != "admin" and review.user_id != user.id:
+            raise HTTPException(status_code=404, detail="Review not found")
+
+        review.attachment_url = attachment_url
         await self.db.commit()
         await self.db.refresh(review)
         return review
-    
-    async def get_all_reviews(self, status: str | None = None, skip: int = 0, limit: int = 10) -> List[ReviewModel]:
+        
+    async def get_all_reviews(
+        self,
+        status: str | None = None,
+        company_id: int | None = None,
+        min_rating: float | None = None,
+        max_rating: float | None = None,
+        is_current_employee: bool | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        skip: int = 0,
+        limit: int = 10
+    ) -> List[ReviewModel]:
         query = select(ReviewModel)
         if status:
             query = query.where(ReviewModel.status == status)
-        query = query.offset(skip).limit(limit)
+        if company_id:
+            query = query.where(ReviewModel.company_id == company_id)
+        if min_rating is not None:
+            query = query.where(ReviewModel.rating >= min_rating)
+        if max_rating is not None:
+            query = query.where(ReviewModel.rating <= max_rating)
+        if is_current_employee is not None:
+            query = query.where(ReviewModel.is_current_employee == is_current_employee)
+        if start_date:
+            query = query.where(ReviewModel.created_at >= start_date)
+        if end_date:
+            query = query.where(ReviewModel.created_at <= end_date)
+        query = query.order_by(ReviewModel.created_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(query)
         return result.scalars().all()

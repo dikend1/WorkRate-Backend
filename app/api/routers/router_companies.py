@@ -1,10 +1,11 @@
 from fastapi import APIRouter,Depends,HTTPException,Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
-from app.schemas.company_schema import CompanyResponse,CompanyCreate,CompanyUpdate
+from datetime import datetime
+from app.schemas.company_schema import CompanyPageResponse, CompanyResponse,CompanyCreate,CompanyUpdate
 from app.services.company_service import CompanyService
-from app.core.roles import require_admin,require_moderator
-from typing import List,Optional
+from app.core.roles import require_admin
+from typing import List
 
 
 router = APIRouter(prefix="/companies", tags=["Companies"])
@@ -25,9 +26,32 @@ async def create_company(
 
 @router.get("/", response_model=List[CompanyResponse])
 async def get_companies(
+    name: str | None = Query(None),
+    location: str | None = Query(None),
+    industry: str | None = Query(None),
+    min_rating: float | None = Query(None, ge=0),
+    start_date: datetime | None = Query(None),
+    end_date: datetime | None = Query(None),
     company_service: CompanyService = Depends(get_company_service)
 ):
-    return await company_service.get_all_companies()
+    return await company_service.get_all_companies(
+        name=name,
+        location=location,
+        industry=industry,
+        min_rating=min_rating,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+@router.get("/{company_id}/page", response_model=CompanyPageResponse)
+async def get_company_page(
+    company_id:int,
+    company_service: CompanyService = Depends(get_company_service)
+):
+    company_page = await company_service.get_company_page(company_id)
+    if not company_page:
+        raise HTTPException(status_code=404,detail="Company not found")
+    return company_page
 
 @router.get("/{company_id}",response_model=CompanyResponse)
 async def get_company(

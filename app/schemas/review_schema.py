@@ -13,6 +13,7 @@ class ReviewBase(BaseModel):
     is_anonymous: bool = False
     recommendations: str | None = None
     work_location: str | None = None
+    attachment_url: str | None = None
 
 class ReviewCreate(ReviewBase):
     pass
@@ -28,6 +29,7 @@ class ReviewUpdate(BaseModel):
     is_anonymous: bool | None = None
     recommendations: str | None = None
     work_location: str | None = None
+    attachment_url: str | None = None
 
 class ReviewResponse(ReviewBase):
     id: int

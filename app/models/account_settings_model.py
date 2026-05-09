@@ -14,4 +14,4 @@ class AccountSettings(Base):
     two_factor_enabled = Column(Boolean, default=False)
 
     # Relationships
-    user = relationship("User", back_populates="account_settings")
+    user = relationship("UserModel", back_populates="account_settings")

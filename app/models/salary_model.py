@@ -13,6 +13,7 @@ class SalaryModel(Base):
     salary_amount = Column(Float, nullable=False)
     currency = Column(String, default="USD", nullable=True)
     experience_years = Column(Float, nullable=True)
+    employment_type = Column(String, nullable=True)
     location = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     

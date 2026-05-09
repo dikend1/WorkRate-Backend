@@ -14,4 +14,4 @@ class ModerationLog(Base):
     moderated_at = Column(DateTime, nullable=False)
 
     # Relationships
-    review = relationship("Review", back_populates="moderation_logs")
+    review = relationship("ReviewModel", back_populates="moderation_logs")

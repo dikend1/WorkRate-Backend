@@ -1,18 +1,13 @@
 from fastapi import Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.session import get_db
-from app.services.auth_service import AuthService
+from app.core.dependencies import get_current_user
+from app.models.user_model import UserModel
 from app.models.user_model import UserRole
 
-def get_auth_service(db: AsyncSession = Depends(get_db)):
-    return AuthService(db)
 
 def require_role(required_role: UserRole):
     async def role_checker(
-        token: str,
-        auth_service: AuthService = Depends(get_auth_service)
+        user: UserModel = Depends(get_current_user)
     ):
-        user = await auth_service.get_current_user(token)
         if user.role != required_role.value:
             raise HTTPException(
                 status_code=403,
@@ -21,7 +16,19 @@ def require_role(required_role: UserRole):
         return user
     return role_checker
 
+def require_any_role(*required_roles: UserRole):
+    async def role_checker(
+        user: UserModel = Depends(get_current_user)
+    ):
+        allowed_roles = {role.value for role in required_roles}
+        if user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Insufficient permissions. Required one of: {', '.join(sorted(allowed_roles))}"
+            )
+        return user
+    return role_checker
+
 # Удобные алиасы
 require_admin = require_role(UserRole.ADMIN)
-require_moderator = require_role(UserRole.MODERATOR)
-require_user = require_role(UserRole.USER)
+require_admin_or_moderator = require_any_role(UserRole.ADMIN, UserRole.MODERATOR)

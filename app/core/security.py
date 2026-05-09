@@ -18,6 +18,11 @@ def create_access_token(data:dict,expires_delta: int | None = None):
     encoded_jwt = jwt.encode(to_encode,settings.SECRET_KEY,algorithm=settings.ALGORITHM)
     return encoded_jwt
 
+def create_purpose_token(data: dict, purpose: str, expires_minutes: int = 60):
+    payload = data.copy()
+    payload["purpose"] = purpose
+    return create_access_token(payload, expires_minutes)
+
 def decode_access_token(token:str):
     try:
         payload = jwt.decode(token,settings.SECRET_KEY,algorithms=[settings.ALGORITHM])

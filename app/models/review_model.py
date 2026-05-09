@@ -27,6 +27,7 @@ class ReviewModel(Base):
     is_anonymous = Column(Boolean,default=False)
     recommendations = Column(String,nullable=True)
     work_location = Column(String,nullable=True)
+    attachment_url = Column(String,nullable=True)
     status = Column(String,default=ReviewStatus.PENDING.value,nullable=False)
     created_at = Column(DateTime,default=datetime.utcnow)
     updated_at = Column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)

@@ -1,6 +1,4 @@
 from pydantic import BaseModel
-from datetime import datetime
-from typing import Any
 
 class AccountSettingsBase(BaseModel):
     email_notifications: bool = True

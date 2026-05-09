@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
+from app.schemas.review_schema import ReviewResponse
 
 class CompanyBase(BaseModel):
     name:str
@@ -35,3 +36,8 @@ class CompanyResponse(CompanyBase):
 
     class Config:
         from_attributes = True
+
+class CompanyPageResponse(BaseModel):
+    company: CompanyResponse
+    reviews: list[ReviewResponse]
+    salary_statistics: dict

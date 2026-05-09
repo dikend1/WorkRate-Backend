@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings
-from pydantic import AnyUrl
 
 
 class Settings(BaseSettings):
@@ -12,6 +11,10 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "IWork Backend"
     OAUTH_GOOGLE_CLIENT_ID: str
     OAUTH_GOOGLE_CLIENT_SECRET: str
+    OAUTH_FACEBOOK_CLIENT_ID: str | None = None
+    OAUTH_FACEBOOK_CLIENT_SECRET: str | None = None
+    OPENAI_API_KEY: str | None = None
+    FRONTEND_URL: str = "http://localhost:3000"
 
     model_config = {
         "env_file": ".env",
@@ -19,6 +22,4 @@ class Settings(BaseSettings):
     }
 
 settings = Settings()
-
-
 

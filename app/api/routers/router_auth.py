@@ -1,15 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
+from app.core.dependencies import get_current_user
 from app.services.auth_service import AuthService
-from app.schemas.user_schema import UserBaseSchema, UserCreateSchema, UserResponseSchema, TokenSchema
-from app.models.user_model import UserModel, UserRole
+from app.schemas.user_schema import (
+    EmailTokenSchema,
+    PasswordResetRequestSchema,
+    PasswordResetSchema,
+    UserCreateSchema,
+    UserResponseSchema,
+    TokenSchema,
+)
+from app.models.user_model import UserModel
 from app.core.security import decode_access_token
 from app.core.config import settings
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from authlib.integrations.httpx_client import AsyncOAuth2Client
-from app.core.roles import require_admin, require_moderator
+from app.core.roles import require_admin
 import secrets
 import httpx
 
@@ -41,9 +50,51 @@ async def register_user(
         email=data.email,
         password=data.password,
         username=data.username,
+        first_name=data.first_name,
+        last_name=data.last_name,
+        profile_picture=data.profile_picture,
+        current_position=data.current_position,
+        current_company_id=data.current_company_id,
         role="user"  # Обычные пользователи регистрируются с ролью user
     )
     return user
+
+@router.post("/confirm-email/request")
+async def request_email_confirmation(
+    user: UserModel = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    token = await auth_service.create_email_confirmation_token(user)
+    return {
+        "message": "Email confirmation token generated",
+        "confirmation_token": token
+    }
+
+@router.post("/confirm-email", response_model=UserResponseSchema)
+async def confirm_email(
+    data: EmailTokenSchema,
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    return await auth_service.confirm_email(data.token)
+
+@router.post("/password-recovery")
+async def request_password_recovery(
+    data: PasswordResetRequestSchema,
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    token = await auth_service.create_password_reset_token(data.email)
+    return {
+        "message": "Password reset token generated",
+        "reset_token": token
+    }
+
+@router.post("/reset-password")
+async def reset_password(
+    data: PasswordResetSchema,
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    await auth_service.reset_password(data.token, data.new_password)
+    return {"message": "Password reset"}
 
 @router.post("/login", response_model=TokenSchema)
 async def login_user(
@@ -83,10 +134,8 @@ async def refresh_token(
 
 @router.get("/me", response_model=UserResponseSchema)
 async def get_me(
-    token: str,
-    auth_service: AuthService = Depends(get_auth_service)
+    user: UserModel = Depends(get_current_user)
 ):
-    user = await auth_service.get_current_user(token)
     return user
 
 # Admin routes
@@ -107,22 +156,6 @@ async def create_user_by_admin(
         role=role
     )
     return new_user
-
-@router.get("/admin/dashboard")
-async def admin_dashboard(user = Depends(require_admin)):
-    return {
-        "message": "Admin dashboard",
-        "user": user.email,
-        "role": user.role
-    }
-
-@router.get("/moderator/reviews")
-async def moderator_reviews(user = Depends(require_moderator)):
-    return {
-        "message": "Pending reviews for moderation",
-        "moderator": user.email,
-        "role": user.role
-    }
 
 # Google OAuth routes with Authlib
 @router.get("/google/login")
@@ -148,6 +181,88 @@ async def google_login(request: Request):
     
     # Редиректим пользователя на Google (НЕ возвращаем JSON!)
     return RedirectResponse(authorization_url)
+
+@router.get("/facebook/login")
+async def facebook_login(request: Request):
+    if not settings.OAUTH_FACEBOOK_CLIENT_ID or not settings.OAUTH_FACEBOOK_CLIENT_SECRET:
+        raise HTTPException(status_code=501, detail="Facebook OAuth is not configured")
+
+    state = secrets.token_urlsafe(32)
+    request.session["facebook_oauth_state"] = state
+    facebook_client = AsyncOAuth2Client(
+        client_id=settings.OAUTH_FACEBOOK_CLIENT_ID,
+        client_secret=settings.OAUTH_FACEBOOK_CLIENT_SECRET,
+        redirect_uri="http://localhost:8000/auth/facebook/callback"
+    )
+    authorization_url, _ = facebook_client.create_authorization_url(
+        "https://www.facebook.com/v19.0/dialog/oauth",
+        scope=["email", "public_profile"],
+        state=state
+    )
+    return RedirectResponse(authorization_url)
+
+@router.get("/facebook/callback")
+async def facebook_callback(
+    request: Request,
+    code: str,
+    state: str,
+    db: AsyncSession = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    if not settings.OAUTH_FACEBOOK_CLIENT_ID or not settings.OAUTH_FACEBOOK_CLIENT_SECRET:
+        raise HTTPException(status_code=501, detail="Facebook OAuth is not configured")
+
+    saved_state = request.session.get("facebook_oauth_state")
+    if not saved_state or saved_state != state:
+        raise HTTPException(status_code=400, detail="State mismatch")
+    request.session.pop("facebook_oauth_state", None)
+
+    facebook_client = AsyncOAuth2Client(
+        client_id=settings.OAUTH_FACEBOOK_CLIENT_ID,
+        client_secret=settings.OAUTH_FACEBOOK_CLIENT_SECRET,
+        redirect_uri="http://localhost:8000/auth/facebook/callback"
+    )
+    token = await facebook_client.fetch_token(
+        "https://graph.facebook.com/v19.0/oauth/access_token",
+        authorization_response=f"http://localhost:8000/auth/facebook/callback?code={code}&state={state}"
+    )
+    access_token = token.get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=400, detail="Failed to get access token")
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            "https://graph.facebook.com/me",
+            params={"fields": "id,email,name", "access_token": access_token}
+        )
+        user_info = response.json()
+
+    facebook_id = user_info.get("id")
+    email = user_info.get("email")
+    if not facebook_id or not email:
+        raise HTTPException(status_code=400, detail="Failed to get user info")
+
+    query = select(UserModel).where(
+        (UserModel.facebook_id == facebook_id) | (UserModel.email == email)
+    )
+    result = await db.execute(query)
+    user = result.scalar_one_or_none()
+    if not user:
+        user = await auth_service.register_user(
+            email=email,
+            username=email.split("@")[0],
+            facebook_id=facebook_id
+        )
+    elif not user.facebook_id:
+        user.facebook_id = facebook_id
+        user.is_verified = True
+        await db.commit()
+        await db.refresh(user)
+
+    token_data = await auth_service.create_token(user)
+    request.session["user"] = {"email": user.email, "username": user.username, "id": user.id}
+    request.session["access_token"] = token_data["access_token"]
+    return RedirectResponse(url="/auth/success", status_code=status.HTTP_302_FOUND)
 
 @router.get("/google/callback")
 async def google_callback(
@@ -200,13 +315,10 @@ async def google_callback(
 
         email = user_info.get("email")
         google_id = user_info.get("id")
-        name = user_info.get("name", "")
-
         if not email or not google_id:
             raise HTTPException(status_code=400, detail="Failed to get user info")
 
         # ШАГ 4: Ищем или создаем пользователя в БД
-        from sqlalchemy import select
         query = select(UserModel).where(
             (UserModel.google_id == google_id) | (UserModel.email == email)
         )
@@ -223,6 +335,11 @@ async def google_callback(
                 is_verified=True  # Google аккаунты считаем верифицированными
             )
             db.add(user)
+            await db.commit()
+            await db.refresh(user)
+        elif not user.google_id:
+            user.google_id = google_id
+            user.is_verified = True
             await db.commit()
             await db.refresh(user)
 
@@ -249,10 +366,6 @@ async def google_callback(
     except HTTPException:
         raise
     except Exception as e:
-        # Логируем полную ошибку для отладки
-        import traceback
-        print(f"OAuth error: {str(e)}")
-        print(traceback.format_exc())
         raise HTTPException(status_code=400, detail=f"OAuth error: {str(e)}")
 
 
